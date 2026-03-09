@@ -65,7 +65,8 @@ defmodule Membrane.SRTLT.Source do
     latency_ms: [
       spec: pos_integer(),
       default: 350,
-      description: "Symmetric SRT latency in milliseconds. Used as the default for `peer_latency_ms` and `rcv_latency_ms` when those are not set."
+      description:
+        "Symmetric SRT latency in milliseconds. Used as the default for `peer_latency_ms` and `rcv_latency_ms` when those are not set."
     ],
     peer_latency_ms: [
       spec: pos_integer() | nil,
@@ -95,7 +96,8 @@ defmodule Membrane.SRTLT.Source do
     chunk_size_bytes: [
       spec: pos_integer(),
       default: 1316,
-      description: "Max bytes read per step by srt-live-transmit. Default 1316 = 188×7 (7 MPEG-TS packets)."
+      description:
+        "Max bytes read per step by srt-live-transmit. Default 1316 = 188×7 (7 MPEG-TS packets)."
     ],
     buffering_packets: [
       spec: pos_integer(),

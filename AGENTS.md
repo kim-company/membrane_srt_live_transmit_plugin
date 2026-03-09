@@ -1,0 +1,1 @@
+- mix credo runs elixir linter. Run it before committing
