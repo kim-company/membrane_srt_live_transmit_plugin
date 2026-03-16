@@ -2,7 +2,7 @@ defmodule Membrane.SRTLT.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @github_url "https://github.com/video-taxi/membrane_srt_live_transmit_plugin"
+  @github_url "https://github.com/kim-company/membrane_srt_live_transmit_plugin"
 
   def project do
     [
