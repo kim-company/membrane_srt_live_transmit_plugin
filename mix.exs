@@ -1,13 +1,21 @@
 defmodule Membrane.SRTLT.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @github_url "https://github.com/video-taxi/membrane_srt_live_transmit_plugin"
+
   def project do
     [
       app: :membrane_srt_live_transmit,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      description: description(),
+      package: package(),
+      docs: docs(),
+      source_url: @github_url,
+      homepage_url: @github_url
     ]
   end
 
@@ -18,7 +26,25 @@ defmodule Membrane.SRTLT.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
+  defp description do
+    "Membrane source element for SRT streams via the srt-live-transmit CLI tool."
+  end
+
+  defp package do
+    [
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => @github_url}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md", "docs/srt-live-transmit-reference.md"],
+      source_ref: "v#{@version}"
+    ]
+  end
+
   defp deps do
     [
       {:membrane_core, "~> 1.2"},
