@@ -103,6 +103,12 @@ defmodule Membrane.SRTLT.Source do
       spec: pos_integer(),
       default: 10,
       description: "Application-level read batch size in srt-live-transmit."
+    ],
+    telemetry_prefix: [
+      spec: [atom()] | nil,
+      default: [:membrane, :srtlt],
+      description:
+        "Telemetry event prefix for SRT stats. Events are emitted as `prefix ++ [:stats]`. Set to `nil` to disable."
     ]
   )
 
@@ -122,6 +128,7 @@ defmodule Membrane.SRTLT.Source do
       passphrase: opts.passphrase,
       chunk_size_bytes: opts.chunk_size_bytes,
       buffering_packets: opts.buffering_packets,
+      telemetry_prefix: opts.telemetry_prefix,
       command_ref: nil,
       received_data?: false,
       notified_connected?: false,
@@ -196,7 +203,7 @@ defmodule Membrane.SRTLT.Source do
   end
 
   def handle_info({:stderr, ospid, payload}, _ctx, %{command_ref: %{ospid: ospid}} = state) do
-    maybe_log_stderr(payload)
+    handle_stderr(payload, state)
     {[], state}
   end
 
@@ -361,12 +368,30 @@ defmodule Membrane.SRTLT.Source do
     ArgumentError -> :ok
   end
 
-  defp maybe_log_stderr(payload) when is_binary(payload) do
-    trimmed = String.trim(payload)
+  defp handle_stderr(payload, state) when is_binary(payload) do
+    if state.telemetry_prefix do
+      metadata = %{host: state.host, port: state.port, stream_id: state.stream_id}
 
-    if trimmed != "" and not String.starts_with?(trimmed, "{") do
-      Membrane.Logger.warning("srt-live-transmit[source]: #{inspect(trimmed)}")
+      for measurements <- Membrane.SRTLT.Stats.parse_all(payload) do
+        Membrane.SRTLT.Stats.emit(measurements, state.telemetry_prefix, metadata)
+      end
     end
+
+    maybe_log_stderr(payload)
+  end
+
+  defp handle_stderr(_payload, _state), do: :ok
+
+  defp maybe_log_stderr(payload) when is_binary(payload) do
+    payload
+    |> String.split("\n", trim: true)
+    |> Enum.each(fn line ->
+      trimmed = String.trim(line)
+
+      if trimmed != "" and not String.starts_with?(trimmed, "{") do
+        Membrane.Logger.warning("srt-live-transmit[source]: #{inspect(trimmed)}")
+      end
+    end)
   end
 
   defp maybe_log_stderr(_payload), do: :ok

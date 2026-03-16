@@ -50,6 +50,7 @@ defmodule Membrane.SRTLT.MixProject do
     [
       {:membrane_core, "~> 1.2"},
       {:erlexec, "~> 2.0"},
+      {:telemetry, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end

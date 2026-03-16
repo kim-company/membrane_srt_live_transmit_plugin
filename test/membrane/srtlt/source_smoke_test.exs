@@ -30,7 +30,8 @@ defmodule Membrane.SRTLT.SourceSmokeTest do
       stream_id: "smoke-stream",
       passphrase: "verysecret1234",
       chunk_size_bytes: 1316,
-      buffering_packets: 10
+      buffering_packets: 10,
+      telemetry_prefix: [:membrane, :srtlt]
     }
 
     {[], state} = Source.handle_init(%{}, opts)
@@ -126,7 +127,8 @@ defmodule Membrane.SRTLT.SourceSmokeTest do
       stream_id: nil,
       passphrase: nil,
       chunk_size_bytes: 1316,
-      buffering_packets: 10
+      buffering_packets: 10,
+      telemetry_prefix: [:membrane, :srtlt]
     }
 
     {[], state} = Source.handle_init(%{}, opts)

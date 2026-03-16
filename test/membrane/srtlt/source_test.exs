@@ -18,7 +18,8 @@ defmodule Membrane.SRTLT.SourceTest do
       stream_id: "test-stream",
       passphrase: nil,
       chunk_size_bytes: 1316,
-      buffering_packets: 10
+      buffering_packets: 10,
+      telemetry_prefix: [:membrane, :srtlt]
     }
   end
 
@@ -164,5 +165,134 @@ defmodule Membrane.SRTLT.SourceTest do
 
     assert [notify_parent: {:source_state, :connected}] = actions
     assert state.received_data?
+  end
+
+  @sample_stats_json ~s({"sid":1,"timepoint":"2026-03-16T11:00:00","time":100,"window":{"flow":8192,"congestion":8192,"flight":0},"link":{"rtt":0.5,"bandwidth":10.0,"maxBandwidth":1000},"send":{"packets":5,"packetsUnique":5,"packetsLost":0,"packetsDropped":0,"packetsRetransmitted":0,"packetsFilterExtra":0,"bytes":7280,"bytesUnique":7280,"bytesDropped":0,"byteAvailBuf":12288000,"msBuf":0,"mbitRate":0.5,"sendPeriod":10},"recv":{"packets":50,"packetsUnique":50,"packetsLost":1,"packetsDropped":0,"packetsRetransmitted":2,"packetsBelated":0,"packetsFilterExtra":0,"packetsFilterSupply":0,"packetsFilterLoss":0,"bytes":65800,"bytesUnique":65800,"bytesLost":0,"bytesDropped":0,"byteAvailBuf":12285000,"msBuf":1,"mbitRate":0.5,"msTsbPdDelay":120}})
+
+  test "stderr with JSON stats emits telemetry event" do
+    ref = make_ref()
+    test_pid = self()
+    handler_id = "source-test-stats-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:membrane, :srtlt, :stats],
+      fn event, measurements, metadata, _config ->
+        send(test_pid, {:telemetry, ref, event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    {[], state} = Source.handle_init(%{}, default_opts())
+    state = %{state | command_ref: %{pid: self(), ospid: 777}}
+
+    {actions, _state} =
+      Source.handle_info(
+        {:stderr, 777, @sample_stats_json},
+        %{},
+        state
+      )
+
+    assert actions == []
+
+    assert_receive {:telemetry, ^ref, [:membrane, :srtlt, :stats], measurements, metadata}
+    assert measurements.recv_bytes == 65_800
+    assert measurements.send_bytes == 7280
+    assert metadata.host == "127.0.0.1"
+    assert metadata.port == 9711
+    assert metadata.stream_id == "test-stream"
+  end
+
+  test "stderr with non-JSON content does not emit telemetry" do
+    ref = make_ref()
+    test_pid = self()
+    handler_id = "source-test-no-stats-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:membrane, :srtlt, :stats],
+      fn event, measurements, metadata, _config ->
+        send(test_pid, {:telemetry, ref, event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    {[], state} = Source.handle_init(%{}, default_opts())
+    state = %{state | command_ref: %{pid: self(), ospid: 888}}
+
+    Source.handle_info(
+      {:stderr, 888, "SRT source connected"},
+      %{},
+      state
+    )
+
+    refute_receive {:telemetry, ^ref, _, _, _}, 100
+  end
+
+  test "stderr with telemetry_prefix nil does not emit telemetry" do
+    ref = make_ref()
+    test_pid = self()
+    handler_id = "source-test-nil-prefix-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:membrane, :srtlt, :stats],
+      fn event, measurements, metadata, _config ->
+        send(test_pid, {:telemetry, ref, event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    opts = %{default_opts() | telemetry_prefix: nil}
+    {[], state} = Source.handle_init(%{}, opts)
+    state = %{state | command_ref: %{pid: self(), ospid: 999}}
+
+    Source.handle_info(
+      {:stderr, 999, @sample_stats_json},
+      %{},
+      state
+    )
+
+    refute_receive {:telemetry, ^ref, _, _, _}, 100
+  end
+
+  test "stderr with mixed log and stats lines emits telemetry only for stats" do
+    ref = make_ref()
+    test_pid = self()
+    handler_id = "source-test-mixed-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:membrane, :srtlt, :stats],
+      fn event, measurements, metadata, _config ->
+        send(test_pid, {:telemetry, ref, event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    {[], state} = Source.handle_init(%{}, default_opts())
+    state = %{state | command_ref: %{pid: self(), ospid: 111}}
+
+    mixed_chunk =
+      "SRT.br: readMessage: small dst buffer\n#{@sample_stats_json}\nanother log line\n"
+
+    Source.handle_info(
+      {:stderr, 111, mixed_chunk},
+      %{},
+      state
+    )
+
+    assert_receive {:telemetry, ^ref, [:membrane, :srtlt, :stats], measurements, _metadata}
+    assert measurements.recv_bytes == 65_800
+
+    refute_receive {:telemetry, ^ref, _, _, _}, 100
   end
 end

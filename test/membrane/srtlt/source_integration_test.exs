@@ -16,6 +16,21 @@ defmodule Membrane.SRTLT.SourceIntegrationTest do
   test "listener source receives data from a caller sender" do
     port = free_port!()
 
+    ref = make_ref()
+    test_pid = self()
+    handler_id = "integration-listener-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:membrane, :srtlt, :stats],
+      fn _event, measurements, metadata, _config ->
+        send(test_pid, {:telemetry_stats, ref, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
     # Start a pipeline with our Source in listener mode
     pipeline =
       Pipeline.start_link_supervised!(
@@ -44,6 +59,12 @@ defmodule Membrane.SRTLT.SourceIntegrationTest do
     # Assert we receive at least one buffer with data
     assert_sink_buffer(pipeline, :sink, %Membrane.Buffer{payload: payload}, 5_000)
     assert byte_size(payload) > 0
+
+    # Assert telemetry stats are emitted (stats report triggers every 100 packets)
+    assert_receive {:telemetry_stats, ^ref, measurements, metadata}, 10_000
+    assert measurements.recv_bytes > 0
+    assert metadata.host == "127.0.0.1"
+    assert metadata.port == port
 
     # Stop the sender, expect disconnected + EOS
     stop_sender(sender)
@@ -114,7 +135,7 @@ defmodule Membrane.SRTLT.SourceIntegrationTest do
         [
           "/bin/sh",
           "-c",
-          "while true; do dd if=/dev/urandom bs=1316 count=1 2>/dev/null; sleep 0.05; done | #{executable} -chunk:1316 -loglevel error file://con \"#{uri}&payloadsize=1316\""
+          "while true; do dd if=/dev/urandom bs=1316 count=1 2>/dev/null; sleep 0.01; done | #{executable} -chunk:1316 -loglevel error file://con \"#{uri}&payloadsize=1316\""
         ],
         [:monitor, :kill_group, {:kill_timeout, 2}, {:group, 0}]
       )
