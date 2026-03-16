@@ -9,6 +9,7 @@ defmodule Membrane.SRTLT.MixProject do
       app: :membrane_srt_live_transmit,
       version: @version,
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -25,6 +26,9 @@ defmodule Membrane.SRTLT.MixProject do
       extra_applications: [:logger]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   defp description do
     "Membrane source element for SRT streams via the srt-live-transmit CLI tool."
