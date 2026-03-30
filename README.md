@@ -32,6 +32,51 @@ def deps do
 end
 ```
 
+## Docker / `erlexec` considerations
+
+This library uses [`erlexec`](https://hex.pm/packages/erlexec) to spawn and
+supervise the `srt-live-transmit` child process. When you run your application
+inside Docker, there are two important things to keep in mind:
+
+1. `erlexec` refuses to run as `root`
+2. `erlexec` expects the `SHELL` environment variable to be set
+
+That means your container should run the application as a non-root user, and
+should define a valid shell path such as `/bin/bash`.
+
+For example, in the test stage of
+`/Users/dmorn/projects/video-taxi/speech/Dockerfile`, the container switches to
+an unprivileged user before running tests and sets `SHELL` explicitly:
+
+```dockerfile
+# erlexec refuses to run as root and requires SHELL to be set.
+# Hex/Rebar are per-user installs, so copy root's Mix home to testuser.
+RUN useradd -m -s /bin/bash testuser \
+  && cp -a /root/.mix /home/testuser/.mix \
+  && chown -R testuser:testuser /app /home/testuser/.mix
+USER testuser
+ENV HOME=/home/testuser
+ENV SHELL=/bin/bash
+RUN mix test
+```
+
+The same applies to release images. In the example Dockerfile, the final image
+sets `SHELL` and runs as `nobody` instead of `root`:
+
+```dockerfile
+WORKDIR "/app"
+RUN chown nobody /app
+
+ENV MIX_ENV="prod"
+ENV SHELL=/bin/bash
+
+COPY --from=release --chown=nobody:root /app/_build/${MIX_ENV}/rel/speech ./
+USER nobody
+```
+
+If your image does not already include Bash, make sure to install it or set
+`SHELL` to another valid shell binary available in the container.
+
 ## Usage
 
 ### Source element
